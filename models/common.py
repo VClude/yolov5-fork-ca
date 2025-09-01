@@ -20,7 +20,7 @@ import requests
 import torch
 import torch.nn as nn
 from PIL import Image
-from torch.cuda import amp
+from torch import amp
 
 # Import 'ultralytics' package or install if missing
 try:
@@ -338,7 +338,107 @@ class SPPF(nn.Module):
             y1 = self.m(x)
             y2 = self.m(y1)
             return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
+        
+class C2f(nn.Module):
+    """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
+    def __init__(self, c1: int, c2: int, n: int = 1, shortcut: bool = False, g: int = 1, e: float = 0.5):
+        """
+        Initialize a CSP bottleneck with 2 convolutions.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            n (int): Number of Bottleneck blocks.
+            shortcut (bool): Whether to use shortcut connections.
+            g (int): Groups for convolutions.
+            e (float): Expansion ratio.
+        """
+        super().__init__()
+        self.c = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + n) * self.c, c2, 1)  # optional act=FReLU(c2)
+        self.m = nn.ModuleList(Bottleneck(self.c, self.c, shortcut, g, e=1.0) for _ in range(n))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through C2f layer."""
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
+    def forward_split(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass using split() instead of chunk()."""
+        y = self.cv1(x).split((self.c, self.c), 1)
+        y = [y[0], y[1]]
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+    
+class C3k(C3):
+    """C3k is a CSP bottleneck module with customizable kernel sizes for feature extraction in neural networks."""
+
+    def __init__(self, c1: int, c2: int, n: int = 1, shortcut: bool = True, g: int = 1, e: float = 0.5, k: int = 3):
+        """
+        Initialize C3k module.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            n (int): Number of Bottleneck blocks.
+            shortcut (bool): Whether to use shortcut connections.
+            g (int): Groups for convolutions.
+            e (float): Expansion ratio.
+            k (int): Kernel size.
+        """
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)  # hidden channels
+        # self.m = nn.Sequential(*(RepBottleneck(c_, c_, shortcut, g, k=(k, k), e=1.0) for _ in range(n)))
+        self.m = nn.Sequential(*(Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n)))
+
+
+class C3k2(C2f):
+    """Faster Implementation of CSP Bottleneck with 2 convolutions."""
+
+    def __init__(
+        self, c1: int, c2: int, n: int = 1, c3k: bool = False, e: float = 0.5, g: int = 1, shortcut: bool = True
+    ):
+        """
+        Initialize C3k2 module.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            n (int): Number of blocks.
+            c3k (bool): Whether to use C3k blocks.
+            e (float): Expansion ratio.
+            g (int): Groups for convolutions.
+            shortcut (bool): Whether to use shortcut connections.
+        """
+        super().__init__(c1, c2, n, shortcut, g, e)
+        self.m = nn.ModuleList(
+            C3k(self.c, self.c, 2, shortcut, g) if c3k else Bottleneck(self.c, self.c, shortcut, g) for _ in range(n)
+        )
+
+class C3k2CA(C2f):
+    """Faster Implementation of CSP Bottleneck with 2 convolutions."""
+
+    def __init__(
+        self, c1: int, c2: int, n: int = 1, c3k: bool = False, e: float = 0.5, g: int = 1, shortcut: bool = True
+    ):
+        """
+        Initialize C3k2 module.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            n (int): Number of blocks.
+            c3k (bool): Whether to use C3k blocks.
+            e (float): Expansion ratio.
+            g (int): Groups for convolutions.
+            shortcut (bool): Whether to use shortcut connections.
+        """
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        self.m = nn.ModuleList(CABottleneck(c_, c_, shortcut, g) for _ in range(n))
 
 class Focus(nn.Module):
     """Focuses spatial information into channel space using slicing and convolution for efficient feature extraction."""
@@ -394,7 +494,591 @@ class GhostBottleneck(nn.Module):
     def forward(self, x):
         """Processes input through conv and shortcut layers, returning their summed output."""
         return self.conv(x) + self.shortcut(x)
+class CABottleneck(nn.Module):
+    #Custom CA Fadil
+    def __init__(self, c1, c2, shortcut=True, g=1, e=0.75, ratio=16):
+        super().__init__()
+        c_ = int(c2 * e)
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv(c_, c2, 3, 1, g=g)
+        self.add = shortcut and c1 == c2
+        # self.ca = CoordAtt(c1,c2,ratio)
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+        mip = max(8, c1 // ratio)
+        self.conv1 = nn.Conv2d(c1, mip, kernel_size=1, stride=1, padding=0)
+        self.bn1 = nn.BatchNorm2d(mip)
+        self.act = nn.Hardswish()
+        self.conv_h = nn.Conv2d(mip, c2, kernel_size=1, stride=1, padding=0)
+        self.conv_w = nn.Conv2d(mip, c2, kernel_size=1, stride=1, padding=0)
 
+    def forward(self, x):
+        x1=self.cv2(self.cv1(x))
+        n, c, h, w = x.size()
+        x_h = self.pool_h(x1)
+        x_w = self.pool_w(x1).permute(0, 1, 3, 2)
+        y = torch.cat([x_h, x_w], dim=2)
+        y = self.conv1(y)
+        y = self.bn1(y)
+        y = self.act(y)
+        x_h, x_w = torch.split(y, [h,w], dim=2)
+        x_w = x_w.permute(0, 1, 3, 2)
+        a_h = self.conv_h(x_h).sigmoid()
+        a_w = self.conv_w(x_w).sigmoid()
+        out = x1 * a_w * a_h
+
+        return x + out if self.add else out
+
+class ChannelAttention(nn.Module):
+
+    def __init__(self, in_planes, ratio=16):
+        """
+        Initialize the Channel Attention module.
+
+        Args:
+            in_planes (int): Number of input channels.
+            ratio (int): Reduction ratio for the hidden channels in the channel attention block.
+        """
+        super().__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        self.f1 = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False)
+        self.relu = nn.ReLU()
+        self.f2 = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        """
+        Forward pass of the Channel Attention module.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            out (torch.Tensor): Output tensor after applying channel attention.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            avg_out = self.f2(self.relu(self.f1(self.avg_pool(x))))
+            max_out = self.f2(self.relu(self.f1(self.max_pool(x))))
+            out = self.sigmoid(avg_out + max_out)
+            return out
+
+
+# contributed by @aash1999
+class SpatialAttention(nn.Module):
+
+    def __init__(self, kernel_size=7):
+        """
+        Initialize the Spatial Attention module.
+
+        Args:
+            kernel_size (int): Size of the convolutional kernel for spatial attention.
+        """
+        super().__init__()
+        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
+        padding = 3 if kernel_size == 7 else 1
+        self.conv = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        """
+        Forward pass of the Spatial Attention module.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            out (torch.Tensor): Output tensor after applying spatial attention.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            avg_out = torch.mean(x, dim=1, keepdim=True)
+            max_out, _ = torch.max(x, dim=1, keepdim=True)
+            x = torch.cat([avg_out, max_out], dim=1)
+            x = self.conv(x)
+            return self.sigmoid(x)
+
+
+class CBAM(nn.Module):
+    # ch_in, ch_out, shortcut, groups, expansion, ratio, kernel_size
+    def __init__(self, c1, c2, kernel_size=3, shortcut=True, g=1, e=0.5, ratio=16):
+        """
+        Initialize the CBAM (Convolutional Block Attention Module) .
+
+        Args:
+            c1 (int): Number of input channels.
+            c2 (int): Number of output channels.
+            kernel_size (int): Size of the convolutional kernel.
+            shortcut (bool): Whether to use a shortcut connection.
+            g (int): Number of groups for grouped convolutions.
+            e (float): Expansion factor for hidden channels.
+            ratio (int): Reduction ratio for the hidden channels in the channel attention block.
+        """
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv(c_, c2, 3, 1, g=g)
+        self.add = shortcut and c1 == c2
+        self.channel_attention = ChannelAttention(c2, ratio)
+        self.spatial_attention = SpatialAttention(kernel_size)
+
+    def forward(self, x):
+        """
+        Forward pass of the CBAM .
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            out (torch.Tensor): Output tensor after applying the CBAM bottleneck.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            x2 = self.cv2(self.cv1(x))
+            out = self.channel_attention(x2) * x2
+            out = self.spatial_attention(out) * out
+            return x + out if self.add else out
+
+
+class Involution(nn.Module):
+
+    def __init__(self, c1, c2, kernel_size, stride):
+        """
+        Initialize the Involution module.
+
+        Args:
+            c1 (int): Number of input channels.
+            c2 (int): Number of output channels.
+            kernel_size (int): Size of the involution kernel.
+            stride (int): Stride for the involution operation.
+        """
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.c1 = c1
+        reduction_ratio = 1
+        self.group_channels = 16
+        self.groups = self.c1 // self.group_channels
+        self.conv1 = Conv(c1, c1 // reduction_ratio, 1)
+        self.conv2 = Conv(c1 // reduction_ratio, kernel_size ** 2 * self.groups, 1, 1)
+
+        if stride > 1:
+            self.avgpool = nn.AvgPool2d(stride, stride)
+        self.unfold = nn.Unfold(kernel_size, 1, (kernel_size - 1) // 2, stride)
+
+    def forward(self, x):
+        """
+        Forward pass of the Involution module.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            out (torch.Tensor): Output tensor after applying the involution operation.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            weight = self.conv2(x)
+            b, c, h, w = weight.shape
+            weight = weight.view(b, self.groups, self.kernel_size ** 2, h, w).unsqueeze(2)
+            out = self.unfold(x).view(b, self.groups, self.group_channels, self.kernel_size ** 2, h, w)
+            out = (weight * out).sum(dim=3).view(b, self.c1, h, w)
+
+            return out
+
+class C3CA(C3):
+    def __init__(self, c1, c2, n=3, shortcut=True, g=1, e=0.75):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        self.m = nn.Sequential(*(CABottleneck(c_, c_, shortcut) for _ in range(n))) 
+class C2PSA(nn.Module):
+    """
+    C2PSA module with attention mechanism for enhanced feature extraction and processing.
+
+    This module implements a convolutional block with attention mechanisms to enhance feature extraction and processing
+    capabilities. It includes a series of PSABlock modules for self-attention and feed-forward operations.
+
+    Attributes:
+        c (int): Number of hidden channels.
+        cv1 (Conv): 1x1 convolution layer to reduce the number of input channels to 2*c.
+        cv2 (Conv): 1x1 convolution layer to reduce the number of output channels to c.
+        m (nn.Sequential): Sequential container of PSABlock modules for attention and feed-forward operations.
+
+    Methods:
+        forward: Performs a forward pass through the C2PSA module, applying attention and feed-forward operations.
+
+    Notes:
+        This module essentially is the same as PSA module, but refactored to allow stacking more PSABlock modules.
+
+    Examples:
+        >>> c2psa = C2PSA(c1=256, c2=256, n=3, e=0.5)
+        >>> input_tensor = torch.randn(1, 256, 64, 64)
+        >>> output_tensor = c2psa(input_tensor)
+    """
+
+    def __init__(self, c1: int, c2: int, n: int = 1, e: float = 0.5):
+        """
+        Initialize C2PSA module.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            n (int): Number of PSABlock modules.
+            e (float): Expansion ratio.
+        """
+        super().__init__()
+        assert c1 == c2
+        self.c = int(c1 * e)
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv(2 * self.c, c1, 1)
+
+        self.m = nn.Sequential(*(PSABlock(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Process the input tensor through a series of PSA blocks.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            (torch.Tensor): Output tensor after processing.
+        """
+        a, b = self.cv1(x).split((self.c, self.c), dim=1)
+        b = self.m(b)
+        return self.cv2(torch.cat((a, b), 1))
+
+class PSABlock(nn.Module):
+    """
+    PSABlock class implementing a Position-Sensitive Attention block for neural networks.
+
+    This class encapsulates the functionality for applying multi-head attention and feed-forward neural network layers
+    with optional shortcut connections.
+
+    Attributes:
+        attn (Attention): Multi-head attention module.
+        ffn (nn.Sequential): Feed-forward neural network module.
+        add (bool): Flag indicating whether to add shortcut connections.
+
+    Methods:
+        forward: Performs a forward pass through the PSABlock, applying attention and feed-forward layers.
+
+    Examples:
+        Create a PSABlock and perform a forward pass
+        >>> psablock = PSABlock(c=128, attn_ratio=0.5, num_heads=4, shortcut=True)
+        >>> input_tensor = torch.randn(1, 128, 32, 32)
+        >>> output_tensor = psablock(input_tensor)
+    """
+
+    def __init__(self, c: int, attn_ratio: float = 0.5, num_heads: int = 4, shortcut: bool = True) -> None:
+        """
+        Initialize the PSABlock.
+
+        Args:
+            c (int): Input and output channels.
+            attn_ratio (float): Attention ratio for key dimension.
+            num_heads (int): Number of attention heads.
+            shortcut (bool): Whether to use shortcut connections.
+        """
+        super().__init__()
+
+        self.attn = Attention(c, attn_ratio=attn_ratio, num_heads=num_heads)
+        self.ffn = nn.Sequential(Conv(c, c * 2, 1), Conv(c * 2, c, 1, act=False))
+        self.add = shortcut
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Execute a forward pass through PSABlock.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            (torch.Tensor): Output tensor after attention and feed-forward processing.
+        """
+        x = x + self.attn(x) if self.add else self.attn(x)
+        x = x + self.ffn(x) if self.add else self.ffn(x)
+        return x
+class Attention(nn.Module):
+    """
+    Attention module that performs self-attention on the input tensor.
+
+    Args:
+        dim (int): The input tensor dimension.
+        num_heads (int): The number of attention heads.
+        attn_ratio (float): The ratio of the attention key dimension to the head dimension.
+
+    Attributes:
+        num_heads (int): The number of attention heads.
+        head_dim (int): The dimension of each attention head.
+        key_dim (int): The dimension of the attention key.
+        scale (float): The scaling factor for the attention scores.
+        qkv (Conv): Convolutional layer for computing the query, key, and value.
+        proj (Conv): Convolutional layer for projecting the attended values.
+        pe (Conv): Convolutional layer for positional encoding.
+    """
+
+    def __init__(self, dim: int, num_heads: int = 8, attn_ratio: float = 0.5):
+        """
+        Initialize multi-head attention module.
+
+        Args:
+            dim (int): Input dimension.
+            num_heads (int): Number of attention heads.
+            attn_ratio (float): Attention ratio for key dimension.
+        """
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.key_dim = int(self.head_dim * attn_ratio)
+        self.scale = self.key_dim**-0.5
+        nh_kd = self.key_dim * num_heads
+        h = dim + nh_kd * 2
+        self.qkv = Conv(dim, h, 1, act=False)
+        self.proj = Conv(dim, dim, 1, act=False)
+        self.pe = Conv(dim, dim, 3, 1, g=dim, act=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Attention module.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            (torch.Tensor): The output tensor after self-attention.
+        """
+        B, C, H, W = x.shape
+        N = H * W
+        qkv = self.qkv(x)
+        q, k, v = qkv.view(B, self.num_heads, self.key_dim * 2 + self.head_dim, N).split(
+            [self.key_dim, self.key_dim, self.head_dim], dim=2
+        )
+
+        attn = (q.transpose(-2, -1) @ k) * self.scale
+        attn = attn.softmax(dim=-1)
+        x = (v @ attn.transpose(-2, -1)).view(B, C, H, W) + self.pe(v.reshape(B, C, H, W))
+        x = self.proj(x)
+        return x
+
+
+class PSA(nn.Module):
+    """
+    PSA class for implementing Position-Sensitive Attention in neural networks.
+
+    This class encapsulates the functionality for applying position-sensitive attention and feed-forward networks to
+    input tensors, enhancing feature extraction and processing capabilities.
+
+    Attributes:
+        c (int): Number of hidden channels after applying the initial convolution.
+        cv1 (Conv): 1x1 convolution layer to reduce the number of input channels to 2*c.
+        cv2 (Conv): 1x1 convolution layer to reduce the number of output channels to c.
+        attn (Attention): Attention module for position-sensitive attention.
+        ffn (nn.Sequential): Feed-forward network for further processing.
+
+    Methods:
+        forward: Applies position-sensitive attention and feed-forward network to the input tensor.
+
+    Examples:
+        Create a PSA module and apply it to an input tensor
+        >>> psa = PSA(c1=128, c2=128, e=0.5)
+        >>> input_tensor = torch.randn(1, 128, 64, 64)
+        >>> output_tensor = psa.forward(input_tensor)
+    """
+
+    def __init__(self, c1: int, c2: int, e: float = 0.5):
+        """
+        Initialize PSA module.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            e (float): Expansion ratio.
+        """
+        super().__init__()
+        assert c1 == c2
+        self.c = int(c1 * e)
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv(2 * self.c, c1, 1)
+
+        self.attn = Attention(self.c, attn_ratio=0.5, num_heads=self.c // 64)
+        self.ffn = nn.Sequential(Conv(self.c, self.c * 2, 1), Conv(self.c * 2, self.c, 1, act=False))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Execute forward pass in PSA module.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            (torch.Tensor): Output tensor after attention and feed-forward processing.
+        """
+        a, b = self.cv1(x).split((self.c, self.c), dim=1)
+        b = b + self.attn(b)
+        b = b + self.ffn(b)
+        return self.cv2(torch.cat((a, b), 1))
+
+class C2fPSA(C2f):
+    """
+    C2fPSA module with enhanced feature extraction using PSA blocks.
+
+    This class extends the C2f module by incorporating PSA blocks for improved attention mechanisms and feature extraction.
+
+    Attributes:
+        c (int): Number of hidden channels.
+        cv1 (Conv): 1x1 convolution layer to reduce the number of input channels to 2*c.
+        cv2 (Conv): 1x1 convolution layer to reduce the number of output channels to c.
+        m (nn.ModuleList): List of PSA blocks for feature extraction.
+
+    Methods:
+        forward: Performs a forward pass through the C2fPSA module.
+        forward_split: Performs a forward pass using split() instead of chunk().
+
+    Examples:
+        >>> import torch
+        >>> from ultralytics.models.common import C2fPSA
+        >>> model = C2fPSA(c1=64, c2=64, n=3, e=0.5)
+        >>> x = torch.randn(1, 64, 128, 128)
+        >>> output = model(x)
+        >>> print(output.shape)
+    """
+
+    def __init__(self, c1: int, c2: int, n: int = 1, e: float = 0.5):
+        """
+        Initialize C2fPSA module.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            n (int): Number of PSABlock modules.
+            e (float): Expansion ratio.
+        """
+        assert c1 == c2
+        super().__init__(c1, c2, n=n, e=e)
+        self.m = nn.ModuleList(PSABlock(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n))
+
+class MaxSigmoidAttnBlock(nn.Module):
+    """Max Sigmoid attention block."""
+
+    def __init__(self, c1: int, c2: int, nh: int = 1, ec: int = 128, gc: int = 512, scale: bool = False):
+        """
+        Initialize MaxSigmoidAttnBlock.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            nh (int): Number of heads.
+            ec (int): Embedding channels.
+            gc (int): Guide channels.
+            scale (bool): Whether to use learnable scale parameter.
+        """
+        super().__init__()
+        self.nh = nh
+        self.hc = c2 // nh
+        self.ec = Conv(c1, ec, k=1, act=False) if c1 != ec else None
+        self.gl = nn.Linear(gc, ec)
+        self.bias = nn.Parameter(torch.zeros(nh))
+        self.proj_conv = Conv(c1, c2, k=3, s=1, act=False)
+        self.scale = nn.Parameter(torch.ones(1, nh, 1, 1)) if scale else 1.0
+
+    def forward(self, x: torch.Tensor, guide: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of MaxSigmoidAttnBlock.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+            guide (torch.Tensor): Guide tensor.
+
+        Returns:
+            (torch.Tensor): Output tensor after attention.
+        """
+        bs, _, h, w = x.shape
+
+        guide = self.gl(guide)
+        guide = guide.view(bs, guide.shape[1], self.nh, self.hc)
+        embed = self.ec(x) if self.ec is not None else x
+        embed = embed.view(bs, self.nh, self.hc, h, w)
+
+        aw = torch.einsum("bmchw,bnmc->bmhwn", embed, guide)
+        aw = aw.max(dim=-1)[0]
+        aw = aw / (self.hc**0.5)
+        aw = aw + self.bias[None, :, None, None]
+        aw = aw.sigmoid() * self.scale
+
+        x = self.proj_conv(x)
+        x = x.view(bs, self.nh, -1, h, w)
+        x = x * aw.unsqueeze(2)
+        return x.view(bs, -1, h, w)
+
+class C2fAttn(nn.Module):
+    """C2f module with an additional attn module."""
+
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        n: int = 1,
+        ec: int = 128,
+        nh: int = 1,
+        gc: int = 512,
+        shortcut: bool = False,
+        g: int = 1,
+        e: float = 0.5,
+    ):
+        """
+        Initialize C2f module with attention mechanism.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            n (int): Number of Bottleneck blocks.
+            ec (int): Embedding channels for attention.
+            nh (int): Number of heads for attention.
+            gc (int): Guide channels for attention.
+            shortcut (bool): Whether to use shortcut connections.
+            g (int): Groups for convolutions.
+            e (float): Expansion ratio.
+        """
+        super().__init__()
+        self.c = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((3 + n) * self.c, c2, 1)  # optional act=FReLU(c2)
+        self.m = nn.ModuleList(Bottleneck(self.c, self.c, shortcut, g, e=1.0) for _ in range(n))
+        self.attn = MaxSigmoidAttnBlock(self.c, self.c, gc=gc, ec=ec, nh=nh)
+
+    def forward(self, x: torch.Tensor, guide: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through C2f layer with attention.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+            guide (torch.Tensor): Guide tensor for attention.
+
+        Returns:
+            (torch.Tensor): Output tensor after processing.
+        """
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        y.append(self.attn(y[-1], guide))
+        return self.cv2(torch.cat(y, 1))
+
+    def forward_split(self, x: torch.Tensor, guide: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass using split() instead of chunk().
+
+        Args:
+            x (torch.Tensor): Input tensor.
+            guide (torch.Tensor): Guide tensor for attention.
+
+        Returns:
+            (torch.Tensor): Output tensor after processing.
+        """
+        y = list(self.cv1(x).split((self.c, self.c), 1))
+        y.extend(m(y[-1]) for m in self.m)
+        y.append(self.attn(y[-1], guide))
+        return self.cv2(torch.cat(y, 1))
 
 class Contract(nn.Module):
     """Contracts spatial dimensions into channel dimensions for efficient processing in neural networks."""
@@ -876,7 +1560,7 @@ class AutoShape(nn.Module):
             p = next(self.model.parameters()) if self.pt else torch.empty(1, device=self.model.device)  # param
             autocast = self.amp and (p.device.type != "cpu")  # Automatic Mixed Precision (AMP) inference
             if isinstance(ims, torch.Tensor):  # torch
-                with amp.autocast(autocast):
+                with amp.autocast('cuda', enabled=autocast):
                     return self.model(ims.to(p.device).type_as(p), augment=augment)  # inference
 
             # Pre-process
@@ -903,7 +1587,7 @@ class AutoShape(nn.Module):
             x = np.ascontiguousarray(np.array(x).transpose((0, 3, 1, 2)))  # stack and BHWC to BCHW
             x = torch.from_numpy(x).to(p.device).type_as(p) / 255  # uint8 to fp16/32
 
-        with amp.autocast(autocast):
+        with amp.autocast('cuda', enabled=autocast):
             # Inference
             with dt[1]:
                 y = self.model(x, augment=augment)  # forward

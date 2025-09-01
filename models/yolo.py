@@ -27,10 +27,16 @@ if platform.system() != "Windows":
 
 from models.common import (
     C3,
+    C2f,
+    C2fAttn,
+    C2PSA,
+    C2fPSA,
+    C3CA,
     C3SPP,
     C3TR,
     SPP,
     SPPF,
+    CABottleneck,
     Bottleneck,
     BottleneckCSP,
     C3Ghost,
@@ -48,6 +54,11 @@ from models.common import (
     GhostBottleneck,
     GhostConv,
     Proto,
+    C3k,
+    C3k2,
+    C3k2CA,
+    CBAM,
+    Involution
 )
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
@@ -406,6 +417,7 @@ def parse_model(d, ch):
             GhostConv,
             Bottleneck,
             GhostBottleneck,
+            CABottleneck,
             SPP,
             SPPF,
             DWConv,
@@ -413,6 +425,13 @@ def parse_model(d, ch):
             Focus,
             CrossConv,
             BottleneckCSP,
+            C3CA,
+            C3k2,
+            C3k2CA,
+            C2fPSA,
+            C2f,
+            C2fAttn,
+            C2PSA,
             C3,
             C3TR,
             C3SPP,
@@ -420,13 +439,15 @@ def parse_model(d, ch):
             nn.ConvTranspose2d,
             DWConvTranspose2d,
             C3x,
+            CBAM,
+            Involution
         }:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, ch_mul)
 
             args = [c1, c2, *args[1:]]
-            if m in {BottleneckCSP, C3, C3TR, C3Ghost, C3x}:
+            if m in {BottleneckCSP, C3, C3CA, C2PSA,C2fPSA,C2f,C2fAttn,C3TR, C3Ghost, C3x, C3k2, C3k2CA}:
                 args.insert(2, n)  # number of repeats
                 n = 1
         elif m is nn.BatchNorm2d:
