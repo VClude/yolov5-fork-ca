@@ -26,21 +26,24 @@ if platform.system() != "Windows":
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 from models.common import (
-    C3,
-    C2f,
-    C2fAttn,
     C2PSA,
-    C2fPSA,
+    C3,
     C3CA,
     C3SPP,
     C3TR,
+    CBAM,
     SPP,
     SPPF,
-    CABottleneck,
     Bottleneck,
     BottleneckCSP,
+    C2f,
+    C2fAttn,
+    C2fPSA,
     C3Ghost,
+    C3k2,
+    C3k2CA,
     C3x,
+    CABottleneck,
     Classify,
     Concat,
     Contract,
@@ -53,12 +56,8 @@ from models.common import (
     Focus,
     GhostBottleneck,
     GhostConv,
+    Involution,
     Proto,
-    C3k,
-    C3k2,
-    C3k2CA,
-    CBAM,
-    Involution
 )
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
@@ -440,14 +439,14 @@ def parse_model(d, ch):
             DWConvTranspose2d,
             C3x,
             CBAM,
-            Involution
+            Involution,
         }:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, ch_mul)
 
             args = [c1, c2, *args[1:]]
-            if m in {BottleneckCSP, C3, C3CA, C2PSA,C2fPSA,C2f,C2fAttn,C3TR, C3Ghost, C3x, C3k2, C3k2CA}:
+            if m in {BottleneckCSP, C3, C3CA, C2PSA, C2fPSA, C2f, C2fAttn, C3TR, C3Ghost, C3x, C3k2, C3k2CA}:
                 args.insert(2, n)  # number of repeats
                 n = 1
         elif m is nn.BatchNorm2d:

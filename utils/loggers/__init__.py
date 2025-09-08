@@ -6,8 +6,8 @@ import os
 import warnings
 from pathlib import Path
 
-from packaging.version import parse as parse_version
 import torch
+from packaging.version import parse as parse_version
 
 from utils.general import LOGGER, colorstr, cv2
 from utils.loggers.clearml.clearml_utils import ClearmlLogger
