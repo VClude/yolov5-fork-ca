@@ -29,10 +29,10 @@ from zipfile import ZipFile, is_zipfile
 import cv2
 import numpy as np
 import pandas as pd
-from packaging.version import parse as parse_version
 import torch
 import torchvision
 import yaml
+from packaging.version import parse as parse_version
 
 # Import 'ultralytics' package or install if missing
 try:
