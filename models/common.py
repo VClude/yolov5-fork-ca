@@ -338,7 +338,8 @@ class SPPF(nn.Module):
             y1 = self.m(x)
             y2 = self.m(y1)
             return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
-        
+
+
 class C2f(nn.Module):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
@@ -372,7 +373,8 @@ class C2f(nn.Module):
         y = [y[0], y[1]]
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
-    
+
+
 class C3k(C3):
     """C3k is a CSP bottleneck module with customizable kernel sizes for feature extraction in neural networks."""
 
@@ -418,6 +420,7 @@ class C3k2(C2f):
             C3k(self.c, self.c, 2, shortcut, g) if c3k else Bottleneck(self.c, self.c, shortcut, g) for _ in range(n)
         )
 
+
 class C3k2CA(C2f):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
@@ -439,6 +442,7 @@ class C3k2CA(C2f):
         super().__init__(c1, c2, n, shortcut, g, e)
         c_ = int(c2 * e)
         self.m = nn.ModuleList(CABottleneck(c_, c_, shortcut, g) for _ in range(n))
+
 
 class Focus(nn.Module):
     """Focuses spatial information into channel space using slicing and convolution for efficient feature extraction."""
@@ -494,8 +498,10 @@ class GhostBottleneck(nn.Module):
     def forward(self, x):
         """Processes input through conv and shortcut layers, returning their summed output."""
         return self.conv(x) + self.shortcut(x)
+
+
 class CABottleneck(nn.Module):
-    #Custom CA Fadil
+    # Custom CA Fadil
     def __init__(self, c1, c2, shortcut=True, g=1, e=0.75, ratio=16):
         super().__init__()
         c_ = int(c2 * e)
@@ -513,7 +519,7 @@ class CABottleneck(nn.Module):
         self.conv_w = nn.Conv2d(mip, c2, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
-        x1=self.cv2(self.cv1(x))
+        x1 = self.cv2(self.cv1(x))
         n, c, h, w = x.size()
         x_h = self.pool_h(x1)
         x_w = self.pool_w(x1).permute(0, 1, 3, 2)
@@ -521,7 +527,7 @@ class CABottleneck(nn.Module):
         y = self.conv1(y)
         y = self.bn1(y)
         y = self.act(y)
-        x_h, x_w = torch.split(y, [h,w], dim=2)
+        x_h, x_w = torch.split(y, [h, w], dim=2)
         x_w = x_w.permute(0, 1, 3, 2)
         a_h = self.conv_h(x_h).sigmoid()
         a_w = self.conv_w(x_w).sigmoid()
@@ -529,8 +535,8 @@ class CABottleneck(nn.Module):
 
         return x + out if self.add else out
 
-class ChannelAttention(nn.Module):
 
+class ChannelAttention(nn.Module):
     def __init__(self, in_planes, ratio=16):
         """
         Initialize the Channel Attention module.
@@ -558,7 +564,7 @@ class ChannelAttention(nn.Module):
             out (torch.Tensor): Output tensor after applying channel attention.
         """
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
+            warnings.simplefilter("ignore")
             avg_out = self.f2(self.relu(self.f1(self.avg_pool(x))))
             max_out = self.f2(self.relu(self.f1(self.max_pool(x))))
             out = self.sigmoid(avg_out + max_out)
@@ -567,7 +573,6 @@ class ChannelAttention(nn.Module):
 
 # contributed by @aash1999
 class SpatialAttention(nn.Module):
-
     def __init__(self, kernel_size=7):
         """
         Initialize the Spatial Attention module.
@@ -576,7 +581,7 @@ class SpatialAttention(nn.Module):
             kernel_size (int): Size of the convolutional kernel for spatial attention.
         """
         super().__init__()
-        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
+        assert kernel_size in (3, 7), "kernel size must be 3 or 7"
         padding = 3 if kernel_size == 7 else 1
         self.conv = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
         self.sigmoid = nn.Sigmoid()
@@ -592,7 +597,7 @@ class SpatialAttention(nn.Module):
             out (torch.Tensor): Output tensor after applying spatial attention.
         """
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
+            warnings.simplefilter("ignore")
             avg_out = torch.mean(x, dim=1, keepdim=True)
             max_out, _ = torch.max(x, dim=1, keepdim=True)
             x = torch.cat([avg_out, max_out], dim=1)
@@ -634,7 +639,7 @@ class CBAM(nn.Module):
             out (torch.Tensor): Output tensor after applying the CBAM bottleneck.
         """
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
+            warnings.simplefilter("ignore")
             x2 = self.cv2(self.cv1(x))
             out = self.channel_attention(x2) * x2
             out = self.spatial_attention(out) * out
@@ -642,7 +647,6 @@ class CBAM(nn.Module):
 
 
 class Involution(nn.Module):
-
     def __init__(self, c1, c2, kernel_size, stride):
         """
         Initialize the Involution module.
@@ -661,7 +665,7 @@ class Involution(nn.Module):
         self.group_channels = 16
         self.groups = self.c1 // self.group_channels
         self.conv1 = Conv(c1, c1 // reduction_ratio, 1)
-        self.conv2 = Conv(c1 // reduction_ratio, kernel_size ** 2 * self.groups, 1, 1)
+        self.conv2 = Conv(c1 // reduction_ratio, kernel_size**2 * self.groups, 1, 1)
 
         if stride > 1:
             self.avgpool = nn.AvgPool2d(stride, stride)
@@ -678,20 +682,23 @@ class Involution(nn.Module):
             out (torch.Tensor): Output tensor after applying the involution operation.
         """
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
+            warnings.simplefilter("ignore")
             weight = self.conv2(x)
             b, c, h, w = weight.shape
-            weight = weight.view(b, self.groups, self.kernel_size ** 2, h, w).unsqueeze(2)
-            out = self.unfold(x).view(b, self.groups, self.group_channels, self.kernel_size ** 2, h, w)
+            weight = weight.view(b, self.groups, self.kernel_size**2, h, w).unsqueeze(2)
+            out = self.unfold(x).view(b, self.groups, self.group_channels, self.kernel_size**2, h, w)
             out = (weight * out).sum(dim=3).view(b, self.c1, h, w)
 
             return out
+
 
 class C3CA(C3):
     def __init__(self, c1, c2, n=3, shortcut=True, g=1, e=0.75):
         super().__init__(c1, c2, n, shortcut, g, e)
         c_ = int(c2 * e)
-        self.m = nn.Sequential(*(CABottleneck(c_, c_, shortcut) for _ in range(n))) 
+        self.m = nn.Sequential(*(CABottleneck(c_, c_, shortcut) for _ in range(n)))
+
+
 class C2PSA(nn.Module):
     """
     C2PSA module with attention mechanism for enhanced feature extraction and processing.
@@ -749,6 +756,7 @@ class C2PSA(nn.Module):
         b = self.m(b)
         return self.cv2(torch.cat((a, b), 1))
 
+
 class PSABlock(nn.Module):
     """
     PSABlock class implementing a Position-Sensitive Attention block for neural networks.
@@ -800,6 +808,8 @@ class PSABlock(nn.Module):
         x = x + self.attn(x) if self.add else self.attn(x)
         x = x + self.ffn(x) if self.add else self.ffn(x)
         return x
+
+
 class Attention(nn.Module):
     """
     Attention module that performs self-attention on the input tensor.
@@ -920,6 +930,7 @@ class PSA(nn.Module):
         b = b + self.ffn(b)
         return self.cv2(torch.cat((a, b), 1))
 
+
 class C2fPSA(C2f):
     """
     C2fPSA module with enhanced feature extraction using PSA blocks.
@@ -958,6 +969,7 @@ class C2fPSA(C2f):
         assert c1 == c2
         super().__init__(c1, c2, n=n, e=e)
         self.m = nn.ModuleList(PSABlock(self.c, attn_ratio=0.5, num_heads=self.c // 64) for _ in range(n))
+
 
 class MaxSigmoidAttnBlock(nn.Module):
     """Max Sigmoid attention block."""
@@ -1011,6 +1023,7 @@ class MaxSigmoidAttnBlock(nn.Module):
         x = x.view(bs, self.nh, -1, h, w)
         x = x * aw.unsqueeze(2)
         return x.view(bs, -1, h, w)
+
 
 class C2fAttn(nn.Module):
     """C2f module with an additional attn module."""
@@ -1079,6 +1092,7 @@ class C2fAttn(nn.Module):
         y.extend(m(y[-1]) for m in self.m)
         y.append(self.attn(y[-1], guide))
         return self.cv2(torch.cat(y, 1))
+
 
 class Contract(nn.Module):
     """Contracts spatial dimensions into channel dimensions for efficient processing in neural networks."""
@@ -1560,7 +1574,7 @@ class AutoShape(nn.Module):
             p = next(self.model.parameters()) if self.pt else torch.empty(1, device=self.model.device)  # param
             autocast = self.amp and (p.device.type != "cpu")  # Automatic Mixed Precision (AMP) inference
             if isinstance(ims, torch.Tensor):  # torch
-                with amp.autocast('cuda', enabled=autocast):
+                with amp.autocast("cuda", enabled=autocast):
                     return self.model(ims.to(p.device).type_as(p), augment=augment)  # inference
 
             # Pre-process
@@ -1587,7 +1601,7 @@ class AutoShape(nn.Module):
             x = np.ascontiguousarray(np.array(x).transpose((0, 3, 1, 2)))  # stack and BHWC to BCHW
             x = torch.from_numpy(x).to(p.device).type_as(p) / 255  # uint8 to fp16/32
 
-        with amp.autocast('cuda', enabled=autocast):
+        with amp.autocast("cuda", enabled=autocast):
             # Inference
             with dt[1]:
                 y = self.model(x, augment=augment)  # forward
