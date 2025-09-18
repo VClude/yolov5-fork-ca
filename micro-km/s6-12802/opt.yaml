@@ -1,0 +1,73 @@
+weights: V:\Work\yv5-ca-stm\app\runs\train_ca\yolov5_stomata_v3_CA3x\weights\best.pt
+cfg: V:\Work\yolov5\models\yolov5s-cav2.yaml
+data: V:\AIModel\KelenjarMinyak\Dataset\YOLODataset\dataset.yaml
+hyp:
+  lr0: 0.01
+  lrf: 0.1
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3.0
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+  box: 0.05
+  cls: 0.3
+  cls_pw: 1.0
+  obj: 1.2
+  obj_pw: 1.0
+  iou_t: 0.25
+  anchor_t: 3.5
+  fl_gamma: 1.5
+  hsv_h: 0.005
+  hsv_s: 0.2
+  hsv_v: 0.3
+  degrees: 5.0
+  translate: 0.05
+  scale: 0.5
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.0
+  fliplr: 0.3
+  mosaic: 0.7
+  mixup: 0.0
+  copy_paste: 0.0
+  label_smoothing: 0.0
+epochs: 150
+batch_size: 8
+imgsz: 1280
+rect: false
+resume: false
+nosave: false
+noval: false
+noautoanchor: false
+noplots: false
+evolve: null
+evolve_population: data\hyps
+resume_evolve: null
+bucket: ''
+cache: disk
+image_weights: false
+device: '0'
+multi_scale: false
+single_cls: false
+optimizer: SGD
+sync_bn: false
+workers: 4
+project: micro-km
+name: s6-1280
+exist_ok: false
+quad: false
+cos_lr: false
+label_smoothing: 0.0
+patience: 30
+freeze:
+- 0
+save_period: -1
+seed: 0
+local_rank: -1
+entity: null
+upload_dataset: false
+bbox_interval: -1
+artifact_alias: latest
+ndjson_console: false
+ndjson_file: false
+save_dir: micro-km\s6-12802
