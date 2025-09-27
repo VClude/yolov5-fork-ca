@@ -36,6 +36,7 @@ from models.common import (
     C3TR,
     SPP,
     SPPF,
+    ASPP,
     CABottleneck,
     Bottleneck,
     BottleneckCSP,
@@ -58,7 +59,9 @@ from models.common import (
     C3k2,
     C3k2CA,
     CBAM,
-    Involution
+    Involution,
+    ECA,
+    DCNConv
 )
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
@@ -420,6 +423,7 @@ def parse_model(d, ch):
             CABottleneck,
             SPP,
             SPPF,
+            ASPP,
             DWConv,
             MixConv2d,
             Focus,
@@ -440,7 +444,9 @@ def parse_model(d, ch):
             DWConvTranspose2d,
             C3x,
             CBAM,
-            Involution
+            Involution,
+            ECA,
+            DCNConv
         }:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
