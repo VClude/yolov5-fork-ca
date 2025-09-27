@@ -37,8 +37,8 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 from classify import val as validate
-from models.experimental import attempt_load
-from models.yolo import ClassificationModel, DetectionModel
+from yolov5.models.experimental import attempt_load
+from yolov5.models.yolo import ClassificationModel, DetectionModel
 from yolov5.utils.dataloaders import create_classification_dataloader
 from yolov5.utils.general import (
     DATASETS_DIR,

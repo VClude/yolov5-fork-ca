@@ -45,7 +45,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 from ultralytics.utils.plotting import Annotator
 
-from models.common import DetectMultiBackend
+from yolov5.models.common import DetectMultiBackend
 from yolov5.utils.augmentations import classify_transforms
 from yolov5.utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
 from yolov5.utils.general import (

@@ -1,7 +1,7 @@
 import argparse
 from torchview import draw_graph
 import torch
-from models.common import DetectMultiBackend
+from yolov5.models.common import DetectMultiBackend
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize YOLOv5 model architecture")

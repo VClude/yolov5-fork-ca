@@ -25,7 +25,7 @@ if str(ROOT) not in sys.path:
 if platform.system() != "Windows":
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
-from models.common import (
+from yolov5.models.common import (
     C3,
     C2f,
     C2fAttn,
@@ -63,7 +63,7 @@ from models.common import (
     ECA,
     DCNConv
 )
-from models.experimental import MixConv2d
+from yolov5.models.experimental import MixConv2d
 from yolov5.utils.autoanchor import check_anchor_order
 from yolov5.utils.general import LOGGER, check_version, check_yaml, colorstr, make_divisible, print_args
 from yolov5.utils.plots import feature_visualization

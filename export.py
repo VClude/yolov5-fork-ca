@@ -67,8 +67,8 @@ if str(ROOT) not in sys.path:
 if platform.system() != "Windows":
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
-from models.experimental import attempt_load
-from models.yolo import ClassificationModel, Detect, DetectionModel, SegmentationModel
+from yolov5.models.experimental import attempt_load
+from yolov5.models.yolo import ClassificationModel, Detect, DetectionModel, SegmentationModel
 from yolov5.utils.dataloaders import LoadImages
 from yolov5.utils.general import (
     LOGGER,
@@ -252,7 +252,7 @@ def export_torchscript(model, im, file, optimize, prefix=colorstr("TorchScript:"
         ```python
         from pathlib import Path
         import torch
-        from models.experimental import attempt_load
+        from yolov5.models.experimental import attempt_load
         from yolov5.utils.torch_utils import select_device
 
         # Load model
@@ -312,7 +312,7 @@ def export_onnx(model, im, file, opset, dynamic, simplify, prefix=colorstr("ONNX
         ```python
         from pathlib import Path
         import torch
-        from models.experimental import attempt_load
+        from yolov5.models.experimental import attempt_load
         from yolov5.utils.torch_utils import select_device
 
         # Load model
@@ -548,7 +548,7 @@ def export_coreml(model, im, file, int8, half, nms, mlmodel, prefix=colorstr("Co
         ```python
         from pathlib import Path
         import torch
-        from models.yolo import Model
+        from yolov5.models.yolo import Model
         model = Model(cfg, ch=3, nc=80)
         im = torch.randn(1, 3, 640, 640)
         file = Path("yolov5s_coreml")
@@ -760,7 +760,7 @@ def export_saved_model(
         import tensorflow as tf
     from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
 
-    from models.tf import TFModel
+    from yolov5.models.tf import TFModel
 
     LOGGER.info(f"\n{prefix} starting export with tensorflow {tf.__version__}...")
     if tf.__version__ > "2.13.1":
@@ -893,7 +893,7 @@ def export_tflite(
     converter.target_spec.supported_types = [tf.float16]
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     if int8:
-        from models.tf import representative_dataset_gen
+        from yolov5.models.tf import representative_dataset_gen
 
         dataset = LoadImages(check_dataset(check_yaml(data))["train"], img_size=imgsz, auto=False)
         converter.representative_dataset = lambda: representative_dataset_gen(dataset, ncalib=100)
