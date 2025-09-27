@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from ultralytics.utils.patches import torch_load
 
-from utils.downloads import attempt_download
+from yolov5.utils.downloads import attempt_download
 
 
 class Sum(nn.Module):

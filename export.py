@@ -69,8 +69,8 @@ if platform.system() != "Windows":
 
 from models.experimental import attempt_load
 from models.yolo import ClassificationModel, Detect, DetectionModel, SegmentationModel
-from utils.dataloaders import LoadImages
-from utils.general import (
+from yolov5.utils.dataloaders import LoadImages
+from yolov5.utils.general import (
     LOGGER,
     Profile,
     check_dataset,
@@ -85,7 +85,7 @@ from utils.general import (
     url2file,
     yaml_save,
 )
-from utils.torch_utils import select_device, smart_inference_mode
+from yolov5.utils.torch_utils import select_device, smart_inference_mode
 
 MACOS = platform.system() == "Darwin"  # macOS environment
 
@@ -253,7 +253,7 @@ def export_torchscript(model, im, file, optimize, prefix=colorstr("TorchScript:"
         from pathlib import Path
         import torch
         from models.experimental import attempt_load
-        from utils.torch_utils import select_device
+        from yolov5.utils.torch_utils import select_device
 
         # Load model
         weights = 'yolov5s.pt'
@@ -313,7 +313,7 @@ def export_onnx(model, im, file, opset, dynamic, simplify, prefix=colorstr("ONNX
         from pathlib import Path
         import torch
         from models.experimental import attempt_load
-        from utils.torch_utils import select_device
+        from yolov5.utils.torch_utils import select_device
 
         # Load model
         weights = 'yolov5s.pt'
@@ -433,7 +433,7 @@ def export_openvino(file, metadata, half, int8, data, prefix=colorstr("OpenVINO:
         import nncf
         import numpy as np
 
-        from utils.dataloaders import create_dataloader
+        from yolov5.utils.dataloaders import create_dataloader
 
         def gen_dataloader(yaml_path, task="train", imgsz=640, workers=4):
             """Generates a DataLoader for model training or validation based on the given YAML dataset configuration."""
