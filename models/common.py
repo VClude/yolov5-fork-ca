@@ -714,6 +714,54 @@ class CBAM(nn.Module):
             return x + out if self.add else out
 
 
+class CoordinateAttention(nn.Module):
+    def __init__(self, c, r=32):
+        super().__init__()
+        c_mid = max(8, c // r)
+        # Split pooling along H and W then fuse
+        self.conv1 = nn.Conv2d(c, c_mid, 1, bias=False)
+        self.bn1   = nn.BatchNorm2d(c_mid)
+        self.act   = nn.ReLU(inplace=True)
+        self.conv_h = nn.Conv2d(c_mid, c, 1, bias=False)
+        self.conv_w = nn.Conv2d(c_mid, c, 1, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        b, c, h, w = x.size()
+        # 1D pooled descriptors
+        x_h = F.adaptive_avg_pool2d(x, (h, 1))  # (b,c,h,1)
+        x_w = F.adaptive_avg_pool2d(x, (1, w))  # (b,c,1,w)
+        x_w = x_w.permute(0, 1, 3, 2)           # (b,c,w,1)
+        y = torch.cat([x_h, x_w], dim=2)        # (b,c,h+w,1)
+
+        y = self.act(self.bn1(self.conv1(y)))
+        x_h, x_w = torch.split(y, [h, w], dim=2)
+        x_w = x_w.permute(0, 1, 3, 2)
+
+        a_h = self.sigmoid(self.conv_h(x_h))
+        a_w = self.sigmoid(self.conv_w(x_w))
+        return x * a_h * a_w
+
+class CBAMHybridCA(nn.Module):
+    """CBAM with CA replacing the spatial branch."""
+    def __init__(self, c, r=16, ca_r=32):
+        super().__init__()
+        # channel branch from CBAM
+        self.mlp = nn.Sequential(
+            nn.Conv2d(c, c // r, 1, bias=False), nn.ReLU(inplace=True),
+            nn.Conv2d(c // r, c, 1, bias=False)
+        )
+        self.sigmoid = nn.Sigmoid()
+        # spatial branch replaced by Coordinate Attention
+        self.ca = CoordinateAttention(c, r=ca_r)
+
+    def forward(self, x):
+        avg = torch.mean(x, dim=(2,3), keepdim=True)
+        mx  = torch.amax(x, dim=(2,3), keepdim=True)
+        ch  = self.mlp(avg) + self.mlp(mx)
+        x   = x * self.sigmoid(ch)
+        return self.ca(x)
+
 class Involution(nn.Module):
 
     def __init__(self, c1, c2, kernel_size, stride):

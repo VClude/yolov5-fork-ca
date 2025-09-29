@@ -1,0 +1,37 @@
+# Optimizer / LR schedule (OneCycle)
+lr0: 0.002          # higher than 1e-3 for small batch (~8); OneCycle will ramp safely
+lrf: 0.10           # final lr = lr0 * lrf
+momentum: 0.937
+weight_decay: 0.0006
+
+# Warmup
+warmup_epochs: 3.0
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# Loss gains (1-class tuning + small-object bias)
+box: 0.085          # ↑ emphasize localization for small targets
+cls: 0.30           # ↓ because only 1 class
+cls_pw: 1.0
+obj: 0.90           # a bit ↑; obj loss competes with box/cls
+obj_pw: 1.0
+iou_t: 0.20
+anchor_t: 4.0
+fl_gamma: 0.0       # keep BCE; set 1.5 only if you see many easy negatives
+
+# Color/geom aug (conservative but effective for microscopy)
+hsv_h: 0.010
+hsv_s: 0.50
+hsv_v: 0.30
+degrees: 1.0        # tiny rotation; larger can hurt axis-aligned boxes
+translate: 0.10
+scale: 0.50
+shear: 0.0
+perspective: 0.0
+flipud: 0.20        # microscopy usually orientation-invariant
+fliplr: 0.50
+
+# Mix/mosaic
+mosaic: 0.60        # helpful for small objects; if unstable, drop to 0.5
+mixup: 0.10         # mild regularization
+copy_paste: 0.0
