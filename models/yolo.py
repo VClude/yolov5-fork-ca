@@ -59,6 +59,8 @@ from yolov5.models.common import (
     C3k2,
     C3k2CA,
     CBAM,
+    CBAMHybridCA,
+    CoordinateAttention,
     Involution,
     ECA,
     DCNConv
@@ -444,6 +446,8 @@ def parse_model(d, ch):
             DWConvTranspose2d,
             C3x,
             CBAM,
+            CBAMHybridCA,
+            CoordinateAttention,
             Involution,
             ECA,
             DCNConv

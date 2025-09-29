@@ -1,0 +1,66 @@
+# YOLOv5m-P6 + CA/CBAM hybrid (nc=1)
+# Requires custom modules: CoordinateAttention, CBAMHybridCA, CBAM, C3x, C3CA
+
+nc: 1
+depth_multiple: 0.67
+width_multiple: 0.75
+anchors:
+  - [19,27, 44,40, 38,94]          # P3/8
+  - [96,68, 86,152, 180,137]       # P4/16
+  - [140,301, 303,264, 238,542]    # P5/32
+  - [436,615, 739,380, 925,792]    # P6/64
+
+# Backbone
+backbone:
+  # [from, number, module, args]
+  [[-1, 1, Conv, [64, 6, 2, 2]],         # 0-P1/2
+   [-1, 1, Conv, [128, 3, 2]],           # 1-P2/4
+   [-1, 3, C3,   [128]],                 # 2
+   [-1, 1, CoordinateAttention, [128]],  # 3  (light CA)
+   [-1, 1, Conv, [256, 3, 2]],           # 4-P3/8
+   [-1, 6, C3,   [256]],                 # 5
+   [-1, 1, CBAMHybridCA, [256]],         # 6  (hybrid @ P3)
+   [-1, 1, Conv, [512, 3, 2]],           # 7-P4/16
+   [-1, 9, C3,  [512]],                  # 8
+   [-1, 1, Conv, [768, 3, 2]],           # 9-P5/32
+   [-1, 3, C3x,   [768]],                # 10
+   [-1, 1, Conv, [1024, 3, 2]],          # 11-P6/64
+   [-1, 3, C3CA, [1024]],                # 12
+   [-1, 1, CBAM, [1024]],                # 13 (full CBAM)
+   [-1, 1, SPPF, [1024, 5]],             # 14
+  ]
+
+# Head (P3,P4,P5,P6 with attentions)
+head:
+  [
+    [-1, 1, Conv, [768, 1, 1]],                       # 15
+    [-1, 1, nn.Upsample, [None, 2, "nearest"]],       # 16
+    [[-1, 10], 1, Concat, [1]],                       # 17  cat P5 (backbone 10)
+    [-1, 3, C3, [768, False]],                        # 18
+
+    [-1, 1, Conv, [512, 1, 1]],                       # 19
+    [-1, 1, nn.Upsample, [None, 2, "nearest"]],       # 20
+    [[-1, 8], 1, Concat, [1]],                        # 21  cat P4 (backbone 8)
+    [-1, 3, C3, [512, False]],                        # 22
+    [-1, 1, CoordinateAttention, [512]],              # 23  (light CA @ P4 head)
+
+    [-1, 1, Conv, [256, 1, 1]],                       # 24
+    [-1, 1, nn.Upsample, [None, 2, "nearest"]],       # 25
+    [[-1, 6], 1, Concat, [1]],                        # 26  cat P3 (backbone 6)
+    [-1, 3, C3, [256, False]],                        # 27  (P3/8 small)
+    [-1, 1, CBAMHybridCA, [256]],                     # 28  (hybrid @ P3 head)
+
+    [-1, 1, Conv, [256, 3, 2]],                       # 29  -> P4/16
+    [[-1, 22], 1, Concat, [1]],                       # 30  cat P4 head (22)
+    [-1, 3, C3, [512, False]],                        # 31  (P4/16 medium)
+
+    [-1, 1, Conv, [512, 3, 2]],                       # 32  -> P5/32
+    [[-1, 18], 1, Concat, [1]],                       # 33  cat P5 head (18)
+    [-1, 3, C3CA, [768, False]],                      # 34  (P5/32 large)
+
+    [-1, 1, Conv, [768, 3, 2]],                       # 35  -> P6/64
+    [[-1, 15], 1, Concat, [1]],                       # 36  cat first head conv (15), like v5m
+    [-1, 3, C3CA, [1024, False]],                     # 37  (P6/64 xlarge)
+
+    [[27, 31, 34, 37], 1, Detect, [nc, anchors]],     # 38  Detect(P3, P4, P5, P6)
+  ]
