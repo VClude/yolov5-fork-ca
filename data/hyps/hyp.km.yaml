@@ -6,6 +6,8 @@ lrf: 0.1           # Final learning rate
 momentum: 0.937    # SGD momentum/Adam beta1
 weight_decay: 0.0005 # Optimizer weight decay
 warmup_epochs: 3.0 # Warmup epochs
+warmup_momentum: 0.8 # warmup initial momentum
+warmup_bias_lr: 0.1 # warmup initial bias lr
 
 # Loss Gains (CRITICAL MODIFICATIONS FOR SMALL OBJECT CONFIDENCE)
 box: 0.05          # Box loss gain (Keep standard)
@@ -15,6 +17,7 @@ obj: 0.7           # <--- SLIGHTLY REDUCED OBJECTNESS GAIN
 obj_pw: 1.0        # obj BCELoss positive_weight
 iou_t: 0.20        # IoU training threshold
 anchor_t: 2.0      # <--- REDUCED to assign more anchors to tiny objects
+# anchors: 3  # anchors per output layer (0 to ignore)
 fl_gamma: 0.0
 # Augmentation Settings (Crucial for Small Object Feature Learning)
 hsv_h: 0.015
