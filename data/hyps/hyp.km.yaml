@@ -1,0 +1,32 @@
+# YOLOv5 🚀 HYPERPARAMETERS - MODIFIED FOR SMALL OBJECT CONFIDENCE
+
+# Base Hyperparameters (Keep default for general stability)
+lr0: 0.01          # Initial learning rate
+lrf: 0.1           # Final learning rate
+momentum: 0.937    # SGD momentum/Adam beta1
+weight_decay: 0.0005 # Optimizer weight decay
+warmup_epochs: 3.0 # Warmup epochs
+
+# Loss Gains (CRITICAL MODIFICATIONS FOR SMALL OBJECT CONFIDENCE)
+box: 0.05          # Box loss gain (Keep standard)
+cls: 2.0           # <--- INCREASED FOR HIGH CONFIDENCE
+cls_pw: 1.0        # cls BCELoss positive_weight
+obj: 0.7           # <--- SLIGHTLY REDUCED OBJECTNESS GAIN
+obj_pw: 1.0        # obj BCELoss positive_weight
+iou_t: 0.20        # IoU training threshold
+anchor_t: 2.0      # <--- REDUCED to assign more anchors to tiny objects
+
+# Augmentation Settings (Crucial for Small Object Feature Learning)
+hsv_h: 0.015
+hsv_s: 0.7
+hsv_v: 0.4
+degrees: 0.0
+translate: 0.1 
+scale: 0.5         # Keep high for multi-scale robustness
+shear: 0.0
+perspective: 0.0
+flipud: 0.0
+fliplr: 0.5
+mosaic: 1.0        # Keep active
+mixup: 0.0
+copy_paste: 0.0
