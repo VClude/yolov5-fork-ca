@@ -34,6 +34,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+import torch.utils.data
 import yaml
 from torch.optim import lr_scheduler
 from tqdm import tqdm
@@ -53,6 +54,7 @@ from utils.autoanchor import check_anchors
 from utils.autobatch import check_train_batch_size
 from utils.callbacks import Callbacks
 from utils.dataloaders import create_dataloader
+from utils.dataloaders import LoadImagesAndLabels
 from utils.downloads import attempt_download, is_url
 from utils.general import (
     LOGGER,
@@ -284,24 +286,37 @@ def train(hyp, opt, device, callbacks):
         LOGGER.info("Using SyncBatchNorm()")
 
     # Trainloader
-    train_loader, dataset = create_dataloader(
-        train_path,
-        imgsz,
-        batch_size // WORLD_SIZE,
-        gs,
-        single_cls,
-        hyp=hyp,
-        augment=True,
-        cache=None if opt.cache == "val" else opt.cache,
-        rect=opt.rect,
-        rank=LOCAL_RANK,
-        workers=workers,
-        image_weights=opt.image_weights,
-        quad=opt.quad,
-        prefix=colorstr("train: "),
-        shuffle=True,
-        seed=opt.seed,
-    )
+    if opt.tiling:
+        # Use LoadImagesAndLabels directly for tiling
+        dataset = LoadImagesAndLabels(train_path, imgsz=imgsz, augment=True)
+        train_loader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=batch_size // WORLD_SIZE,
+            shuffle=True,
+            num_workers=workers,
+            pin_memory=True,
+            collate_fn=LoadImagesAndLabels.collate_fn,
+        )
+    else:
+        # Use standard create_dataloader
+        train_loader, dataset = create_dataloader(
+            train_path,
+            imgsz,
+            batch_size // WORLD_SIZE,
+            gs,
+            single_cls,
+            hyp=hyp,
+            augment=True,
+            cache=None if opt.cache == "val" else opt.cache,
+            rect=opt.rect,
+            rank=LOCAL_RANK,
+            workers=workers,
+            image_weights=opt.image_weights,
+            quad=opt.quad,
+            prefix=colorstr("train: "),
+            shuffle=True,
+            seed=opt.seed,
+        )
     labels = np.concatenate(dataset.labels, 0)
     mlc = int(labels[:, 0].max())  # max label class
     assert mlc < nc, f"Label class {mlc} exceeds nc={nc} in {data}. Possible class labels are 0-{nc - 1}"
@@ -597,6 +612,7 @@ def parse_opt(known=False):
     parser.add_argument("--name", default="exp", help="save to project/name")
     parser.add_argument("--exist-ok", action="store_true", help="existing project/name ok, do not increment")
     parser.add_argument("--quad", action="store_true", help="quad dataloader")
+    parser.add_argument("--tiling", action="store_true", help="enable tilling of images")
     parser.add_argument("--cos-lr", action="store_true", help="cosine LR scheduler")
     parser.add_argument("--label-smoothing", type=float, default=0.0, help="Label smoothing epsilon")
     parser.add_argument("--patience", type=int, default=100, help="EarlyStopping patience (epochs without improvement)")
