@@ -15,7 +15,7 @@ obj: 0.7           # <--- SLIGHTLY REDUCED OBJECTNESS GAIN
 obj_pw: 1.0        # obj BCELoss positive_weight
 iou_t: 0.20        # IoU training threshold
 anchor_t: 2.0      # <--- REDUCED to assign more anchors to tiny objects
-
+fl_gamma: 0.0
 # Augmentation Settings (Crucial for Small Object Feature Learning)
 hsv_h: 0.015
 hsv_s: 0.7
