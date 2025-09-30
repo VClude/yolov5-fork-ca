@@ -1,0 +1,45 @@
+# tiny-dense-p2-dcn-640-adamw.hyp.yaml
+
+# --- Optimizer / schedule (AdamW) ---
+lr0: 0.003          # good with AdamW; raise to 0.0035 if very stable
+lrf: 0.01
+momentum: 0.937     # Adam beta1
+weight_decay: 0.01  # AdamW decoupled WD
+
+warmup_epochs: 3.0
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# --- Loss balances (nc=1; 640px input) ---
+box: 0.3           # a touch higher to help localization at 640
+cls: 0.35            # single-class
+cls_pw: 1.0
+obj: 4.5            # scaled down from 960-profile (avoid over-firing at 640)
+obj_pw: 1.0
+
+# --- Matcher / anchors ---
+iou_t: 0.20         # stable for tiny objects
+anchor_t: 4.0       # permissive anchor match
+# anchors: 3        # keep autoanchor
+
+# --- Focal loss ---
+fl_gamma: 2      # tame easy negatives in clutter
+
+# --- Augmentations (gentle for tiny objects) ---
+hsv_h: 0.015
+hsv_s: 0.45
+hsv_v: 0.35
+
+degrees: 0.0
+translate: 0.03     # slightly smaller than 960 profile
+scale: 0.4
+shear: 0.0
+perspective: 0.0
+
+flipud: 0.0
+fliplr: 0.5
+
+# --- Mixed augs ---
+mosaic: 0.3         # keep helpful but not constant
+mixup: 0.00
+copy_paste: 0.0

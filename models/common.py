@@ -17,8 +17,12 @@ import cv2
 import numpy as np
 import pandas as pd
 import requests
-import torch
-import torch.nn as nn
+import torch, torch.nn as nn, torch.nn.functional as F
+try:
+    from torchvision.ops import deform_conv2d
+    _HAS_TV_DCN = True
+except Exception:
+    _HAS_TV_DCN = False
 from PIL import Image
 from torch import amp
 
@@ -282,6 +286,56 @@ class C3SPP(C3):
         c_ = int(c2 * e)
         self.m = SPP(c_, c_, k)
 
+class ECA(nn.Module):
+    """Efficient Channel Attention with safe length handling."""
+    def __init__(self, c1: int, c2: int, k: int = 5):  # accept c1 and c2
+        super().__init__()
+        if k % 2 == 0:  # force odd kernel
+            k += 1
+        self.c = c1
+        self.conv = nn.Conv1d(1, 1, kernel_size=k, padding=k // 2, bias=False)
+
+    def forward(self, x):
+        b, c, h, w = x.shape
+        y = x.mean(dim=(2, 3), keepdim=False).unsqueeze(1)   # [B,1,C]
+        y = self.conv(y)                                     # [B,1,C] (same length because k odd)
+        if y.shape[-1] != c:  # safety crop/pad
+            import torch.nn.functional as F
+            if y.shape[-1] > c:
+                y = y[..., :c]
+            else:
+                y = F.pad(y, (0, c - y.shape[-1]))
+        w = torch.sigmoid(y).view(b, c, 1, 1)
+        return x * w
+
+class ASPP(nn.Module):
+    def __init__(self, c, out=None, rates=(1, 6, 12, 18)):
+        super().__init__()
+        out = out or c
+        # 4 parallel branches
+        self.b0 = nn.Sequential(nn.Conv2d(c, out // 4, 1, 1, 0, bias=False),
+                                nn.BatchNorm2d(out // 4),
+                                nn.SiLU(inplace=True))
+        self.b1 = nn.Sequential(nn.Conv2d(c, out // 4, 3, 1, padding=rates[1],
+                                          dilation=rates[1], bias=False),
+                                nn.BatchNorm2d(out // 4),
+                                nn.SiLU(inplace=True))
+        self.b2 = nn.Sequential(nn.Conv2d(c, out // 4, 3, 1, padding=rates[2],
+                                          dilation=rates[2], bias=False),
+                                nn.BatchNorm2d(out // 4),
+                                nn.SiLU(inplace=True))
+        self.b3 = nn.Sequential(nn.Conv2d(c, out // 4, 3, 1, padding=rates[3],
+                                          dilation=rates[3], bias=False),
+                                nn.BatchNorm2d(out // 4),
+                                nn.SiLU(inplace=True))
+        self.proj = nn.Sequential(nn.Conv2d(out, out, 1, 1, 0, bias=False),
+                                  nn.BatchNorm2d(out),
+                                  nn.SiLU(inplace=True))
+
+    def forward(self, x):
+        y = torch.cat([self.b0(x), self.b1(x), self.b2(x), self.b3(x)], 1)
+        return self.proj(y)
+
 
 class C3Ghost(C3):
     """Implements a C3 module with Ghost Bottlenecks for efficient feature extraction in YOLOv5."""
@@ -292,6 +346,25 @@ class C3Ghost(C3):
         c_ = int(c2 * e)  # hidden channels
         self.m = nn.Sequential(*(GhostBottleneck(c_, c_) for _ in range(n)))
 
+class DCNConv(nn.Module):
+    def __init__(self, c1, c2, k=3, s=1, p=None, g=1, bias=True):
+        super().__init__()
+        self.k, self.s, self.g = k, s, g
+        self.p = k // 2 if p is None else p
+        self.off_mask = nn.Conv2d(c1, g*(2*k*k+k*k), k, s, self.p)  # offsets+mask
+        self.weight = nn.Parameter(torch.empty(c2, c1, k, k))
+        nn.init.kaiming_normal_(self.weight, mode='fan_out', nonlinearity='relu')
+        self.bias = nn.Parameter(torch.zeros(c2)) if bias else None
+        self.fallback = nn.Conv2d(c1, c2, k, s, self.p, groups=g, bias=bias)
+    def forward(self, x):
+        if _HAS_TV_DCN:
+            om = self.off_mask(x)
+            c = 2*self.k*self.k
+            offset, mask = om[:, :c], om[:, c:].sigmoid()
+            return deform_conv2d(x, offset, self.weight, self.bias,
+                                 stride=(self.s,self.s), padding=(self.p,self.p),
+                                 dilation=(1,1), mask=mask)
+        return self.fallback(x)
 
 class SPP(nn.Module):
     """Implements Spatial Pyramid Pooling (SPP) for feature extraction, ref: https://arxiv.org/abs/1406.4729."""
@@ -641,6 +714,54 @@ class CBAM(nn.Module):
             return x + out if self.add else out
 
 
+class CoordinateAttention(nn.Module):
+    def __init__(self, c, r=32):
+        super().__init__()
+        c_mid = max(8, c // r)
+        # Split pooling along H and W then fuse
+        self.conv1 = nn.Conv2d(c, c_mid, 1, bias=False)
+        self.bn1   = nn.BatchNorm2d(c_mid)
+        self.act   = nn.ReLU(inplace=True)
+        self.conv_h = nn.Conv2d(c_mid, c, 1, bias=False)
+        self.conv_w = nn.Conv2d(c_mid, c, 1, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        b, c, h, w = x.size()
+        # 1D pooled descriptors
+        x_h = F.adaptive_avg_pool2d(x, (h, 1))  # (b,c,h,1)
+        x_w = F.adaptive_avg_pool2d(x, (1, w))  # (b,c,1,w)
+        x_w = x_w.permute(0, 1, 3, 2)           # (b,c,w,1)
+        y = torch.cat([x_h, x_w], dim=2)        # (b,c,h+w,1)
+
+        y = self.act(self.bn1(self.conv1(y)))
+        x_h, x_w = torch.split(y, [h, w], dim=2)
+        x_w = x_w.permute(0, 1, 3, 2)
+
+        a_h = self.sigmoid(self.conv_h(x_h))
+        a_w = self.sigmoid(self.conv_w(x_w))
+        return x * a_h * a_w
+
+class CBAMHybridCA(nn.Module):
+    """CBAM with CA replacing the spatial branch."""
+    def __init__(self, c, r=16, ca_r=32):
+        super().__init__()
+        # channel branch from CBAM
+        self.mlp = nn.Sequential(
+            nn.Conv2d(c, c // r, 1, bias=False), nn.ReLU(inplace=True),
+            nn.Conv2d(c // r, c, 1, bias=False)
+        )
+        self.sigmoid = nn.Sigmoid()
+        # spatial branch replaced by Coordinate Attention
+        self.ca = CoordinateAttention(c, r=ca_r)
+
+    def forward(self, x):
+        avg = torch.mean(x, dim=(2,3), keepdim=True)
+        mx  = torch.amax(x, dim=(2,3), keepdim=True)
+        ch  = self.mlp(avg) + self.mlp(mx)
+        x   = x * self.sigmoid(ch)
+        return self.ca(x)
+
 class Involution(nn.Module):
 
     def __init__(self, c1, c2, kernel_size, stride):
@@ -688,7 +809,7 @@ class Involution(nn.Module):
             return out
 
 class C3CA(C3):
-    def __init__(self, c1, c2, n=3, shortcut=True, g=1, e=0.75):
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
         super().__init__(c1, c2, n, shortcut, g, e)
         c_ = int(c2 * e)
         self.m = nn.Sequential(*(CABottleneck(c_, c_, shortcut) for _ in range(n))) 

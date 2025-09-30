@@ -1,0 +1,39 @@
+# Optimizer (AdamW)
+lr0: 0.0025
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.01
+warmup_epochs: 5.0
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# Loss balance (nc=1) — reduce FPs
+box: 0.32        # tighter boxes
+cls: 0.40        # slightly higher than recall-heavy setup
+cls_pw: 1.0
+obj: 4.0         # avoid over-firing on clutter
+obj_pw: 1.0
+
+# Matcher / anchors
+iou_t: 0.25      # tighter match improves label quality signal
+anchor_t: 4.0    # permissive
+fl_gamma: 2.0    # stronger suppression of easy negatives
+
+# Gentle aug (precision-friendly)
+hsv_h: 0.015
+hsv_s: 0.45
+hsv_v: 0.35
+degrees: 0.0
+translate: 0.03
+scale: 0.4
+shear: 0.0
+perspective: 0.0
+flipud: 0.0
+fliplr: 0.5
+
+# Mosaic/MixUp (let YOLOv5 handle them, not Roboflow)
+mosaic: 0.5
+mixup: 0.0
+copy_paste: 0.0
+# if your fork supports it:
+# close_mosaic: 15
