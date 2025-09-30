@@ -20,24 +20,20 @@
 #     "--cache", "disk"
 # ])
 
-import roboflow
-rf = roboflow.Roboflow(api_key="AkZNNZBdY0QrIN62pzp0")
-project = rf.workspace("kelenjar-minyak").project("kelenjar-minyak-yolo-standard-ke3j5")
-dataset = project.version(5).download("yolov5")
+dataset = "/home/muhammad_ardiansyah/yolov5-fork-ca/Kelenjar-Minyak-Yolo-Standard-5"
 
 import subprocess
 subprocess.run([
     "python", "train.py",
-    "--img", "1280",
+    "--img", "960",
     "--batch", "-1",
     "--epochs", "200",
-    f"--data={dataset.location}/data.yaml",
-    "--weights", "yolov5s.pt",
+    f"--data={dataset}/data.yaml",
+    "--weights", "yolov5l.pt",
     "--hyp", "hyp.ca.yaml",
-    "--cfg", "yolov5m6-cbam-ca-hybrid-c3x-c3ca.yaml",
-    "--name", "km-cbam-cav2-hybrid-c3x-c3ca",
+    "--cfg", "yolov5l-ca3x-c3x.yaml",
+    "--name", "km-ca3x-c3x-960",
     "--device", "0",
-    "--optimizer", "AdamW", 
     "--workers", "32",
     "--cache", "disk"
 ])
