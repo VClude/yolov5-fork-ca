@@ -6,20 +6,35 @@
 @echo off
 REM Run YOLOv5 training on Windows
 
+REM KM
+@REM python train.py ^
+@REM   --data "V:\AIModel\KelenjarMinyak\Dataset\YOLODataset\dataset.yaml" ^
+@REM   --weights "V:\Work\yv5-ca-stm\app\runs\train_ca\yolov5_stomata_v3_CA3x\weights\best.pt" ^
+@REM   --cfg "yolov5s.yaml" ^
+@REM   --img 384 ^
+@REM   --batch-size 4 ^
+@REM   --epochs 200 ^
+@REM   --hyp "data\hyps\hyp.scratch-low.yaml" ^
+@REM   --name "km-v5s-base" ^
+@REM   --cache disk ^
+@REM   --workers 32 ^
+@REM   --patience 30 ^
+@REM   --device 0 
+
+@REM STOMATA
 python train.py ^
-  --data "V:\AIModel\KelenjarMinyak\Dataset\YOLODataset\dataset.yaml" ^
-  --weights "V:\Work\yv5-ca-stm\app\runs\train_ca\yolov5_stomata_v3_CA3x\weights\best.pt" ^
-  --cfg "yolov5s-cav2.yaml" ^
-  --img 1280 ^
-  --batch-size 8 ^
-  --epochs 150 ^
-  --hyp "data\hyps\hyp.micro.yaml" ^
-  --project "micro-km" ^
-  --name "s6-1280" ^
+  --data "V:\Work\yv5-ca-stm\yolo_format_dataset\stomata\dataset.yaml" ^
+  --weights "models\pretrained\yolov5s.pt" ^
+  --cfg "yolov5s-ca1x.yaml" ^
+  --img 640 ^
+  --batch-size 16 ^
+  --epochs 200 ^
+  --hyp "data\hyps\hyp.ca.yaml" ^
+  --name "sto-v5s-ca1x-640" ^
   --cache disk ^
   --workers 4 ^
   --patience 30 ^
-  --device 0
+  --device 0 
 
 pause
 
