@@ -5,10 +5,10 @@ nc: 1   # <--- REMINDER: Set this to your class count (e.g., 1)
 depth_multiple: 0.33  # model depth multiple (s-size)
 width_multiple: 0.50  # model width multiple (s-size)
 anchors:
-  - [8,8, 10,10, 12,12]         # P2/4 anchors (ULTRA-OPTIMIZED for tiny objects)
-  - [14,14, 16,16, 18,18]       # P3/8 anchors (ULTRA-OPTIMIZED for very small objects)
-  - [20,20, 22,22, 24,24]       # P4/16 anchors (ULTRA-OPTIMIZED for small objects)
-  - [26,26, 28,28, 30,30]       # P5/32 anchors (ULTRA-OPTIMIZED for medium objects)
+  - [3,5, 5,8, 8,11]       # P2/4 anchors (VERY SMALL)
+  - [10,13, 16,30, 33,23]   # P3/8 anchors (small)
+  - [30,61, 62,45, 59,119]  # P4/16 anchors (medium)
+  - [116,90, 156,198, 373,326] # P5/32 anchors (large)
 
 # YOLOv5 backbone
 backbone:
