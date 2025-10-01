@@ -26,7 +26,7 @@ import subprocess
 subprocess.run([
     "python", "train.py",
     "--img", "640",                     # Optimal for 1920x1080 tiling
-    "--batch", "16",                    # Conservative batch size for tiling
+    "--batch", "16",                    # Conservative for tiling (try 24/32 if 16GB+ VRAM)
     "--epochs", "300",                  # Increased for small object learning
     f"--data={dataset}/data.yaml",
     "--weights", "yolov5s.pt",          # Use your 4-head model

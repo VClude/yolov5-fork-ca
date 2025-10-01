@@ -288,7 +288,21 @@ def train(hyp, opt, device, callbacks):
     # Trainloader
     if opt.tiling:
         # Use LoadImagesAndLabels directly for tiling
-        dataset = LoadImagesAndLabels(train_path, imgsz=imgsz, augment=True)
+        dataset = LoadImagesAndLabels(
+            train_path, 
+            img_size=imgsz, 
+            batch_size=batch_size // WORLD_SIZE,
+            augment=True,
+            hyp=hyp,
+            rect=opt.rect,
+            cache_images=None if opt.cache == "val" else opt.cache,
+            single_cls=single_cls,
+            stride=int(gs),
+            pad=0.0,
+            image_weights=opt.image_weights,
+            prefix=colorstr("train: "),
+            seed=opt.seed
+        )
         train_loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size // WORLD_SIZE,
