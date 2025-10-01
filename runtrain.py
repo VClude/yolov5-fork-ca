@@ -39,6 +39,7 @@ subprocess.run([
     "--cache", "disk",
     "--rect",                          # Rectangular training for 16:9 images
     "--tiling",                        # Enable tiling for small objects
+    "--noautoanchor",                  # Use our pre-optimized anchors
     "--cos-lr",                        # Cosine learning rate scheduler
     "--label-smoothing", "0.1",        # Label smoothing for better generalization
     "--patience", "50",                # Early stopping patience
