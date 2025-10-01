@@ -1,8 +1,8 @@
 # YOLOv5 🚀 HYPERPARAMETERS - MODIFIED FOR SMALL OBJECT CONFIDENCE
 
-# Base Hyperparameters (Keep default for general stability)
-lr0: 0.01          # Initial learning rate
-lrf: 0.1           # Final learning rate
+# Base Hyperparameters (Optimized for Small Objects + Tiling)
+lr0: 0.01          # Initial learning rate (optimal for AdamW)
+lrf: 0.01          # Final learning rate (lower for fine convergence)
 momentum: 0.937    # SGD momentum/Adam beta1
 weight_decay: 0.0005 # Optimizer weight decay
 warmup_epochs: 3.0 # Warmup epochs
@@ -11,25 +11,25 @@ warmup_bias_lr: 0.1 # warmup initial bias lr
 
 # Loss Gains (CRITICAL MODIFICATIONS FOR SMALL OBJECT CONFIDENCE)
 box: 0.05          # Box loss gain (Keep standard)
-cls: 2.0           # <--- INCREASED FOR HIGH CONFIDENCE
+cls: 3.0           # <--- INCREASED FURTHER for high confidence on small objects
 cls_pw: 1.0        # cls BCELoss positive_weight
-obj: 0.7           # <--- SLIGHTLY REDUCED OBJECTNESS GAIN
+obj: 0.5           # <--- REDUCED MORE to focus on classification over objectness
 obj_pw: 1.0        # obj BCELoss positive_weight
-iou_t: 0.25        # IoU training threshold
-anchor_t: 2.0      # <--- REDUCED to assign more anchors to tiny objects
+iou_t: 0.15        # <--- LOWERED IoU threshold for small objects
+anchor_t: 1.5      # <--- REDUCED FURTHER for tiny object assignment
 # anchors: 3  # anchors per output layer (0 to ignore)
-fl_gamma: 0.0
-# Augmentation Settings (Crucial for Small Object Feature Learning)
-hsv_h: 0.015
-hsv_s: 0.7
-hsv_v: 0.4
-degrees: 0.0
-translate: 0.1 
-scale: 0.5         # Keep high for multi-scale robustness
-shear: 0.0
-perspective: 0.0
-flipud: 0.0
-fliplr: 0.5
-mosaic: 1.0        # Keep active
-mixup: 0.0
-copy_paste: 0.0
+fl_gamma: 1.5      # <--- ENABLE focal loss for hard negative mining
+# Augmentation Settings (Optimized for Small Objects + Tiling)
+hsv_h: 0.010       # <--- REDUCED hue variation for small objects
+hsv_s: 0.5         # <--- REDUCED saturation variation
+hsv_v: 0.3         # <--- REDUCED value variation
+degrees: 5.0       # <--- MINIMAL rotation for small objects
+translate: 0.05    # <--- REDUCED translation (critical for small objects)
+scale: 0.2         # <--- REDUCED scale variation (preserve small object size)
+shear: 0.0         # Keep disabled
+perspective: 0.0   # Keep disabled
+flipud: 0.0        # Keep disabled
+fliplr: 0.5        # Keep horizontal flip
+mosaic: 0.8        # <--- SLIGHTLY REDUCED for better small object preservation
+mixup: 0.1         # <--- ENABLE light mixup for data augmentation
+copy_paste: 0.1    # <--- ENABLE copy-paste for small objects

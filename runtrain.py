@@ -28,7 +28,7 @@ subprocess.run([
     "--img", "640",                     # Optimal for 1920x1080 tiling
     "--batch", "16",                    # Conservative batch size for tiling
     "--epochs", "300",                  # Increased for small object learning
-    f"--data={dataset.location}/data.yaml",
+    f"--data={dataset}/data.yaml",
     "--weights", "yolov5s.pt",          # Use your 4-head model
     "--hyp", "data/hyps/hyp.km.yaml",   # Your optimized small object hyperparameters
     "--cfg", "models/yolov5s-km-ca-neck.yaml",  # Your P2-P5 model
