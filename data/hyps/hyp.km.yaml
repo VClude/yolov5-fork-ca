@@ -9,27 +9,27 @@ warmup_epochs: 3.0 # Warmup epochs
 warmup_momentum: 0.8 # warmup initial momentum
 warmup_bias_lr: 0.1 # warmup initial bias lr
 
-# Loss Gains (CRITICAL MODIFICATIONS FOR SMALL OBJECT CONFIDENCE)
+# Loss Gains (BALANCED MODIFICATIONS FOR SMALL OBJECTS)
 box: 0.05          # Box loss gain (Keep standard)
-cls: 3.0           # <--- INCREASED FURTHER for high confidence on small objects
+cls: 1.5           # <--- REDUCED from 3.0 (was too aggressive)
 cls_pw: 1.0        # cls BCELoss positive_weight
-obj: 0.5           # <--- REDUCED MORE to focus on classification over objectness
+obj: 0.7           # <--- INCREASED from 0.5 (was too low)
 obj_pw: 1.0        # obj BCELoss positive_weight
-iou_t: 0.15        # <--- LOWERED IoU threshold for small objects
-anchor_t: 1.5      # <--- REDUCED FURTHER for tiny object assignment
+iou_t: 0.20        # <--- INCREASED from 0.15 (more stable)
+anchor_t: 2.0      # <--- INCREASED from 1.5 (more stable)
 # anchors: 3  # anchors per output layer (0 to ignore)
-fl_gamma: 1.5      # <--- ENABLE focal loss for hard negative mining
-# Augmentation Settings (Optimized for Small Objects + Tiling)
-hsv_h: 0.010       # <--- REDUCED hue variation for small objects
-hsv_s: 0.5         # <--- REDUCED saturation variation
-hsv_v: 0.3         # <--- REDUCED value variation
-degrees: 5.0       # <--- MINIMAL rotation for small objects
-translate: 0.05    # <--- REDUCED translation (critical for small objects)
-scale: 0.2         # <--- REDUCED scale variation (preserve small object size)
+fl_gamma: 0.5      # <--- REDUCED focal loss (less aggressive)
+# Augmentation Settings (BALANCED for Small Objects)
+hsv_h: 0.015       # <--- INCREASED slightly (was too restrictive)
+hsv_s: 0.7         # <--- INCREASED for better variation
+hsv_v: 0.4         # <--- INCREASED for better variation
+degrees: 10.0      # <--- INCREASED rotation for robustness
+translate: 0.1     # <--- INCREASED translation (was too restrictive)
+scale: 0.5         # <--- INCREASED scale variation for multi-scale
 shear: 0.0         # Keep disabled
 perspective: 0.0   # Keep disabled
 flipud: 0.0        # Keep disabled
 fliplr: 0.5        # Keep horizontal flip
-mosaic: 0.8        # <--- SLIGHTLY REDUCED for better small object preservation
-mixup: 0.1         # <--- ENABLE light mixup for data augmentation
-copy_paste: 0.1    # <--- ENABLE copy-paste for small objects
+mosaic: 1.0        # <--- INCREASED back to full mosaic
+mixup: 0.0         # <--- DISABLED mixup (can hurt small objects)
+copy_paste: 0.0    # <--- DISABLED copy-paste (can hurt small objects)

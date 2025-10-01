@@ -25,22 +25,23 @@ dataset = "/home/muhammad_ardiansyah/yolov5-fork-ca/Kelenjar-Minyak-Yolo-Standar
 import subprocess
 subprocess.run([
     "python", "train.py",
-    "--img", "640",                     # Optimal for 1920x1080 tiling
-    "--batch", "16",                    # Conservative for tiling (try 24/32 if 16GB+ VRAM)
-    "--epochs", "300",                  # Increased for small object learning
+    "--img", "832",                     # Larger image size for better small object detection
+    "--batch", "12",                    # Adjusted for larger image size
+    "--epochs", "300",                  # Keep extended training
     f"--data={dataset}/data.yaml",
-    "--weights", "yolov5s.pt",          # Use your 4-head model
-    "--hyp", "data/hyps/hyp.km.yaml",   # Your optimized small object hyperparameters
+    "--weights", "yolov5s.pt",          # Use standard weights for stability
+    "--hyp", "data/hyps/hyp.km.yaml",   # Your optimized hyperparameters
     "--cfg", "models/yolov5s-km-ca-neck.yaml",  # Your P2-P5 model
-    "--name", "km-v5s-km-cav2-neck-tiling",
+    "--name", "km-no-tiling-832",
     "--device", "0",
-    "--optimizer", "AdamW",             # Better for small objects
-    "--workers", "8",                   # Reduced to avoid bottleneck
+    "--optimizer", "AdamW",             # Keep AdamW
+    "--workers", "8",                   
     "--cache", "disk",
-    "--rect",                          # Rectangular training for 16:9 images
-    "--tiling",                        # Enable tiling for small objects
+    "--rect",                          # Keep rectangular training
+    # "--tiling",                      # REMOVED TILING
     "--cos-lr",                        # Cosine learning rate scheduler
-    "--label-smoothing", "0.1",        # Label smoothing for better generalization
+    "--label-smoothing", "0.1",        # Label smoothing
     "--patience", "50",                # Early stopping patience
     "--save-period", "25",             # Save checkpoint every 25 epochs
+    "--multi-scale",                   # Add multi-scale training for robustness
 ])
